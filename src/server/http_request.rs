@@ -26,60 +26,68 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     pub fn from_request_string(request: String) -> Self {
-        let mut lines = request.lines();
-
-        // First line: GET / HTTP/1.1
+        let (header_part, body_part) = request.split_once("\r\n\r\n").unwrap_or((&request, ""));
+        let mut lines = header_part.lines();
         let request_line = lines.next().unwrap();
-
         let mut parts = request_line.split_whitespace();
-
         let method = match parts.next().unwrap() {
             "GET" => HttpMethod::GET,
             "POST" => HttpMethod::POST,
             other => panic!("Unsupported method: {}", other),
         };
-
         let path = parts.next().unwrap().to_string();
-
         let version = parts.next().unwrap().replace("HTTP/", "");
-
         let mut headers = HashMap::new();
 
         for line in lines {
             let mut split = line.splitn(2, ':');
 
-            let key = match split.next() {
-                Some(value) => value,
-                None => continue,
-            };
-
+            let key = split.next().unwrap().trim();
             let value = split.next().unwrap_or("").trim();
 
             headers.insert(key.to_string(), value.to_string());
         }
+
+        let body = body_part.as_bytes().to_vec();
 
         Self {
             method,
             path,
             version,
             headers,
-            body: Vec::new(),
+            body,
         }
     }
 
     pub fn stringify_stream(reader: &mut impl BufRead) -> String {
         let mut request = String::new();
 
-        for line in reader.lines() {
-            let line = line.unwrap();
+        // Read headers
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            request.push_str(&line);
 
-            // End of HTTP headers
-            if line.is_empty() {
+            if line == "\r\n" {
                 break;
             }
+        }
 
-            request.push_str(&line);
-            request.push('\n');
+        let content_length = request
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("Content-Length:")
+                    .map(|v| v.trim().parse::<usize>().unwrap())
+            })
+            .unwrap_or(0);
+
+        // Read body
+        if content_length > 0 {
+            let mut body = vec![0; content_length];
+
+            reader.read_exact(&mut body).unwrap();
+
+            request.push_str(&String::from_utf8_lossy(&body));
         }
 
         request

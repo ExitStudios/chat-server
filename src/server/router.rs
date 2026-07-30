@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{
     handlers::{
         pages::{base_handler, not_found_handler},
@@ -6,10 +8,11 @@ use crate::{
     server::{
         http_request::{HttpMethod, HttpRequest},
         http_response::HttpResponse,
+        state::ServerState,
     },
 };
 
-type Handler = fn(HttpRequest) -> HttpResponse;
+type Handler = fn(HttpRequest, Arc<Mutex<ServerState>>) -> HttpResponse;
 
 pub struct Route {
     pub method: HttpMethod,
@@ -63,12 +66,12 @@ impl Router {
         self.routes.iter().find(|route| route.matches(request))
     }
 
-    pub fn handle(&self, request: HttpRequest) -> HttpResponse {
+    pub fn handle(&self, request: HttpRequest, state: Arc<Mutex<ServerState>>) -> HttpResponse {
         match self.find_route(&request) {
-            Some(route) => (route.handler)(request),
+            Some(route) => (route.handler)(request, state),
             None => {
                 println!("Route not found: {:#?}", request.path);
-                not_found_handler(request)
+                not_found_handler()
             }
         }
     }
