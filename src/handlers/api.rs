@@ -1,16 +1,20 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
+
+use serde::Serialize;
 
 use crate::{
     models::message::Message,
     server::{
         http_request::HttpRequest,
         http_response::{HttpResponse, StatusCode},
-        state::ServerState,
+        router::AppContext,
     },
 };
+
+#[derive(Serialize)]
+struct SuccessResponse {
+    success: bool,
+}
 
 pub fn test_post() -> HttpResponse {
     let response_body = b"POST received successfully".to_vec();
@@ -27,20 +31,20 @@ pub fn test_post() -> HttpResponse {
     HttpResponse::new(StatusCode::OK, headers, response_body)
 }
 
-pub fn post_message(request: HttpRequest, state: Arc<Mutex<ServerState>>) -> HttpResponse {
-    let message: Message = serde_json::from_slice(&request.body).unwrap();
-
-    println!("msg: {:#?}", message);
+pub fn post_message(request: HttpRequest, state: &AppContext) -> HttpResponse {
+    let message: Message = match serde_json::from_slice(&request.body) {
+        Ok(msg) => msg,
+        Err(_) => return HttpResponse::bad_request(),
+    };
 
     let mut state = state.lock().unwrap();
     state.messages.push(message);
 
-    HttpResponse::json(r#"{"success":true}"#.to_string())
+    HttpResponse::json(StatusCode::Created, SuccessResponse { success: true })
 }
 
-pub fn get_messages(_request: HttpRequest, state: Arc<Mutex<ServerState>>) -> HttpResponse {
+pub fn get_messages(_request: HttpRequest, state: &AppContext) -> HttpResponse {
     let state = state.lock().unwrap();
-    let json = serde_json::to_string(&state.messages).unwrap();
 
-    HttpResponse::json(json)
+    HttpResponse::json(StatusCode::OK, &state.messages)
 }

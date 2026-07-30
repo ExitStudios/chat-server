@@ -33,12 +33,10 @@ submitBtn.onclick = () => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      // user: "Bernd",
+      user: "Bernd",
       text: msg,
     }),
   });
 
   loadMessages();
-
-  console.log(msg);
 };

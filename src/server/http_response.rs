@@ -1,24 +1,34 @@
-use std::{collections::HashMap, fs, io::Write, net::TcpStream};
+use std::{collections::HashMap, io::Write, net::TcpStream};
 
-use crate::utils::consts::paths;
+use serde::Serialize;
 
 #[derive(Debug)]
 pub enum StatusCode {
-    OK,
-    NotFound,
+    OK = 200,
+    Created = 201,
+    BadRequest = 400,
+    NotFound = 404,
+    InternalServerError = 500,
 }
 
 impl StatusCode {
-    pub fn to_http_string(&self) -> &str {
+    pub fn to_http_string(&self) -> String {
         match self {
-            StatusCode::OK => "HTTP/1.1 200 OK",
-            StatusCode::NotFound => "HTTP/1.1 404 NOT FOUND",
+            StatusCode::OK => "HTTP/1.1 200 OK".to_string(),
+            StatusCode::Created => "HTTP/1.1 201 CREATED".to_string(),
+            StatusCode::BadRequest => "HTTP/1.1 400 BAD REQUEST".to_string(),
+            StatusCode::NotFound => "HTTP/1.1 404 NOT FOUND".to_string(),
+            StatusCode::InternalServerError => "HTTP/1.1 500 INTERNAL SERVER ERROR".to_string(),
         }
     }
 
     pub fn to_status_code(status: &str) -> StatusCode {
         match status {
             "HTTP/1.1 200 OK" => StatusCode::OK,
+            "HTTP/1.1 201 CREATED" => StatusCode::Created,
+            "HTTP/1.1 400 BAD REQUEST" => StatusCode::BadRequest,
+            "HTTP/1.1 404 NOT FOUND" => StatusCode::NotFound,
+            "HTTP/1.1 500 INTERNAL SERVER ERROR" => StatusCode::InternalServerError,
             _ => StatusCode::NotFound,
         }
     }
@@ -88,14 +98,10 @@ impl HttpResponse {
         )
     }
 
-    pub fn json(body: String) -> Self {
-        let bytes: Vec<u8> = body.bytes().collect();
+    pub fn json<T: Serialize>(code: StatusCode, data: T) -> Self {
+        let data = serde_json::to_vec(&data).unwrap();
 
-        HttpResponse::new(
-            StatusCode::OK,
-            Self::create_headers(&bytes, "application/json"),
-            bytes,
-        )
+        HttpResponse::new(code, Self::create_headers(&data, "application/json"), data)
     }
 
     pub fn js(body: Vec<u8>) -> Self {
@@ -106,12 +112,10 @@ impl HttpResponse {
         )
     }
 
-    pub fn text(body: Vec<u8>) -> Self {
-        HttpResponse::new(
-            StatusCode::OK,
-            Self::create_headers(&body, "text/plain"),
-            body,
-        )
+    pub fn text(code: StatusCode, text: &str) -> Self {
+        let bytes: Vec<u8> = text.bytes().collect();
+
+        HttpResponse::new(code, Self::create_headers(&bytes, "text/plain"), bytes)
     }
 
     pub fn file(_path: &str) -> Self {
@@ -125,12 +129,10 @@ impl HttpResponse {
     }
 
     pub fn not_found() -> Self {
-        let body = fs::read(paths::not_found_html()).unwrap();
+        HttpResponse::text(StatusCode::NotFound, "404: Not found")
+    }
 
-        HttpResponse::new(
-            StatusCode::NotFound,
-            Self::create_headers(&body, "text/html"),
-            body,
-        )
+    pub fn bad_request() -> HttpResponse {
+        HttpResponse::text(StatusCode::BadRequest, "Invalid request")
     }
 }

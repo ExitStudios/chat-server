@@ -12,7 +12,13 @@ use crate::{
     },
 };
 
-type Handler = fn(HttpRequest, Arc<Mutex<ServerState>>) -> HttpResponse;
+pub type AppContext = Arc<Mutex<ServerState>>;
+
+// pub struct AppContext {
+//     pub state: Arc<Mutex<ServerState>>,
+// }
+
+type Handler = fn(HttpRequest, &AppContext) -> HttpResponse;
 
 pub struct Route {
     pub method: HttpMethod,
@@ -30,8 +36,7 @@ impl Route {
     }
 
     pub fn matches(&self, request: &HttpRequest) -> bool {
-        // self.method == request.method && self.path == request.path
-        self.path == request.path
+        self.method == request.method && self.path == request.path
     }
 }
 
@@ -66,7 +71,7 @@ impl Router {
         self.routes.iter().find(|route| route.matches(request))
     }
 
-    pub fn handle(&self, request: HttpRequest, state: Arc<Mutex<ServerState>>) -> HttpResponse {
+    pub fn handle(&self, request: HttpRequest, state: &AppContext) -> HttpResponse {
         match self.find_route(&request) {
             Some(route) => (route.handler)(request, state),
             None => {

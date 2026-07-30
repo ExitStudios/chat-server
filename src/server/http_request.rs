@@ -1,5 +1,7 @@
 use std::{collections::HashMap, io::BufRead};
 
+pub struct SplittingError;
+
 #[derive(Debug, PartialEq)]
 pub enum HttpMethod {
     GET,
@@ -25,8 +27,27 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    pub fn from_request_string(request: String) -> Self {
-        let (header_part, body_part) = request.split_once("\r\n\r\n").unwrap_or((&request, ""));
+    pub fn new(
+        method: HttpMethod,
+        path: String,
+        version: String,
+        headers: HashMap<String, String>,
+        body: Vec<u8>,
+    ) -> Self {
+        HttpRequest {
+            method,
+            path,
+            version,
+            headers,
+            body,
+        }
+    }
+
+    pub fn from_request_string(request: String) -> Result<Self, SplittingError> {
+        let (header_part, body_part) = request
+            .split_once("\r\n\r\n")
+            .ok_or("Error while trying to split request")
+            .map_err(|_| SplittingError)?;
         let mut lines = header_part.lines();
         let request_line = lines.next().unwrap();
         let mut parts = request_line.split_whitespace();
@@ -50,13 +71,13 @@ impl HttpRequest {
 
         let body = body_part.as_bytes().to_vec();
 
-        Self {
+        Ok(Self {
             method,
             path,
             version,
             headers,
             body,
-        }
+        })
     }
 
     pub fn stringify_stream(reader: &mut impl BufRead) -> String {
