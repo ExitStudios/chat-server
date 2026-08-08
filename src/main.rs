@@ -1,35 +1,36 @@
-use std::{
-    net::TcpListener,
-    println,
-    sync::{Arc, Mutex},
+use orbit::{
+    http::response::HttpResponse,
+    router::AddRoutes,
+    server::{Server, ServerError},
 };
 
-use crate::server::{Server, router::AppContext, state::ServerState, thread_pool::ThreadPool};
+fn main() -> Result<(), ServerError> {
+    let mut server = Server::new();
 
-pub mod handlers;
-pub mod models;
-pub mod server;
-pub mod utils;
+    server.static_files_automatic("src/public");
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let pool = ThreadPool::build(4).unwrap();
+    server.get(
+        "/",
+        Box::new(|_req| HttpResponse::ok().html("src/public/html/index.html")),
+    );
 
-    let state: AppContext = Arc::new(Mutex::new(ServerState {
-        messages: vec![],
-        users: vec![],
-        next_message_id: 42,
-    }));
-    let server = Arc::new(Server::new(state));
+    // server.get(
+    //     "/style.css",
+    //     Box::new(|_req| HttpResponse::ok().file("src/public/css/index.css")),
+    // );
 
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        let server = Arc::clone(&server);
+    // server.get(
+    //     "/script.js",
+    //     Box::new(|_req| HttpResponse::ok().file("src/public/js/script.js")),
+    // );
 
-        pool.execute(move || {
-            server.handle_connection(stream);
-        });
-    }
+    server.get(
+        "/api/messages",
+        Box::new(|_req| HttpResponse::ok().json(&Box::new("{}"))),
+    );
+    server.post("/api/messages", Box::new(|_req| HttpResponse::ok()));
 
-    println!("Shutting down.")
+    server.listen("127.0.0.1:3000")?;
+
+    Ok(())
 }
